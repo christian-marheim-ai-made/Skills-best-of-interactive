@@ -1,0 +1,79 @@
+<h2 class="sr-only">Interactive sketch of the walk-through illusion: what your character can see, cell by cell, as it walks through a portal. A ray through the opening sees the other world, a ray beside the portal sees this world, a ray into a pillar or a wall sees black. The world you are in flips as you cross the portal line, and at that instant everything that changes sits in the pillars' black shadow.</h2>
+<style>
+#pw-wrap canvas{width:100%;height:auto;display:block;border-radius:var(--radius)}
+.pw-row{display:grid;grid-template-columns:150px 1fr 64px;gap:8px 12px;align-items:center;font-size:13px;color:var(--text-secondary)}
+.pw-key{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-2px}
+</style>
+<div id="pw-wrap" style="padding:0.5rem 0">
+<canvas id="pw" width="680" height="420"></canvas>
+<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--text-secondary);margin:10px 0 12px">
+<span><span class="pw-key" style="background:#97C459"></span>Origin tiles</span>
+<span><span class="pw-key" style="background:#FAC775"></span>Destination tiles</span>
+<span><span class="pw-key" style="background:#000"></span>Blocked: black</span>
+<span><span class="pw-key" style="background:#5F5E5A"></span>Pillars and walls</span>
+<span id="pw-state" style="margin-left:auto;color:var(--text-primary)"></span>
+</div>
+<div class="pw-row"><span>Walk (toward, through)</span><input type="range" id="pw-x" min="6" max="34" step="0.1" value="13"><span id="pw-xv"></span></div>
+<div class="pw-row" style="margin-top:6px"><span>Sideways</span><input type="range" id="pw-y" min="-3" max="3" step="0.1" value="0"><span id="pw-yv"></span></div>
+<div class="pw-row" style="margin-top:6px"><span>Portal opening</span><input type="range" id="pw-o" min="1" max="6" step="0.5" value="2"><span id="pw-ov"></span></div>
+<div class="pw-row" style="margin-top:6px"><span>Pillar depth</span><input type="range" id="pw-d" min="0.5" max="3" step="0.25" value="1.5"><span id="pw-dv"></span></div>
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px;color:var(--text-secondary);align-items:center">
+<button id="pw-play"><i class="ti ti-player-play" aria-hidden="true"></i> Walk through</button>
+<button id="pw-view">Show camera view</button>
+<label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="pw-reveal"> Show what the black hides</label>
+</div>
+</div>
+<script>
+const cv=document.getElementById('pw'),ctx=cv.getContext('2d');
+const W=40,H=26,PX=20,CY=13,R=14;
+const OW=[[8,3,1,7],[25,2,3,2],[24,19,1,5],[13,17,1,4]];
+const DW=[[28,8,1,5],[12,19,5,1],[31,15,2,2],[26,20,3,1]];
+let iso=false,playing=false,raf=0,dir=1;
+const $=id=>document.getElementById(id);
+function pillars(hw,d){return [[PX-d/2,CY-hw-1,d,1],[PX-d/2,CY+hw,d,1]];}
+function hitBox(ax,ay,bx,by,b){let t0=0,t1=1;const dx=bx-ax,dy=by-ay;const p=[-dx,dx,-dy,dy],q=[ax-b[0],b[0]+b[2]-ax,ay-b[1],b[1]+b[3]-ay];for(let i=0;i<4;i++){if(p[i]===0){if(q[i]<0)return false;}else{const r=q[i]/p[i];if(p[i]<0){if(r>t1)return false;if(r>t0)t0=r;}else{if(r<t0)return false;if(r<t1)t1=r;}}}return t0<=t1&&t1>0.0001&&t0<0.9999;}
+function inBox(x,y,b){return x>=b[0]&&x<=b[0]+b[2]&&y>=b[1]&&y<=b[1]+b[3];}
+function cellState(cx,cy,ex,ey,hw,d){
+  const pil=pillars(hw,d);
+  for(const b of pil) if(inBox(cx,cy,b)) return {k:'pillar'};
+  const here=ex<PX?'O':'D', there=here==='O'?'D':'O';
+  let world=here;
+  if((ex-PX)*(cx-PX)<0){const ys=ey+(cy-ey)*(PX-ex)/(cx-ex); if(Math.abs(ys-CY)<hw) world=there;}
+  const walls=world==='O'?OW:DW;
+  for(const b of walls) if(inBox(cx,cy,b)) {for(const p of pil) if(hitBox(ex,ey,cx,cy,p)) return {k:'black',w:world,wall:true}; return {k:'wall',w:world};}
+  const dist=Math.hypot(cx-ex,cy-ey);
+  if(dist>R) return {k:'black',w:world};
+  for(const b of pil) if(hitBox(ex,ey,cx,cy,b)) return {k:'black',w:world};
+  for(const b of walls) if(hitBox(ex,ey,cx,cy,b)) return {k:'black',w:world};
+  return {k:'tile',w:world};
+}
+function color(st,i,j,reveal){
+  const ch=(i+j)%2===0;
+  const tile=w=>w==='O'?(ch?'#97C459':'#8DBB50'):(ch?'#FAC775':'#F2BC66');
+  if(st.k==='pillar') return '#5F5E5A';
+  if(st.k==='wall') return st.w==='O'?'#3B6D11':'#854F0B';
+  if(st.k==='tile') return tile(st.w);
+  if(reveal) return st.wall?(st.w==='O'?'#27500A':'#633806'):(st.w==='O'?'#2f4a14':'#5a3d0c');
+  return '#000';
+}
+function draw(){
+  const ex=+$('pw-x').value, ey=CY+ +$('pw-y').value, hw=+$('pw-o').value, d=+$('pw-d').value, reveal=$('pw-reveal').checked;
+  $('pw-xv').textContent=(ex-PX).toFixed(1); $('pw-yv').textContent=(+$('pw-y').value).toFixed(1); $('pw-ov').textContent=(hw*2).toFixed(1); $('pw-dv').textContent=d.toFixed(2);
+  const dx=ex-PX, inside=Math.abs(dx)<=d/2;
+  const phase=dx< -3?'1 · approaching':dx<-d/2?'2 · right in front':inside?'3 · inside the portal':dx<3?'4 · just through':'4 · through';
+  $('pw-state').textContent=`You are in: ${ex<PX?'origin':'destination'} · ${phase}`;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  let s;
+  if(iso){s=8.6; ctx.setTransform(s*0.7071,s*0.7071*0.5,-s*0.7071,s*0.7071*0.5,340-((W/2-H/2)*s*0.7071)+ (H/2)*0, 210-((W/2+H/2)*s*0.7071*0.5));}
+  else {s=Math.min(680/W,420/H); ctx.setTransform(s,0,0,s,(680-W*s)/2,(420-H*s)/2);}
+  for(let i=0;i<W;i++)for(let j=0;j<H;j++){const st=cellState(i+0.5,j+0.5,ex,ey,hw,d); ctx.fillStyle=color(st,i,j,reveal); ctx.fillRect(i,j,1.02,1.02);}
+  ctx.strokeStyle='#D4537E'; ctx.lineWidth=0.12; ctx.setLineDash([0.4,0.3]); ctx.beginPath(); ctx.moveTo(PX,CY-hw); ctx.lineTo(PX,CY+hw); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle='#D85A30'; ctx.beginPath(); ctx.arc(ex,ey,0.45,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#fff'; ctx.lineWidth=0.1; ctx.stroke();
+}
+function tick(){ if(!playing) return; const x=$('pw-x'); let v=+x.value+0.06*dir; if(v>=34){v=34;dir=-1;} if(v<=6){v=6;dir=1;} x.value=v.toFixed(2); draw(); raf=requestAnimationFrame(tick);}
+['pw-x','pw-y','pw-o','pw-d','pw-reveal'].forEach(id=>$(id).addEventListener('input',draw));
+$('pw-play').addEventListener('click',()=>{playing=!playing; $('pw-play').innerHTML=playing?'<i class="ti ti-player-pause" aria-hidden="true"></i> Pause':'<i class="ti ti-player-play" aria-hidden="true"></i> Walk through'; if(playing) tick(); else cancelAnimationFrame(raf);});
+$('pw-view').addEventListener('click',()=>{iso=!iso; $('pw-view').textContent=iso?'Show top-down':'Show camera view'; draw();});
+draw();
+</script>

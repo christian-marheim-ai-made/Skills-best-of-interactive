@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- decision-sketch.template.html - functional-ui-sketch's template for any sketch that asks the operator to decide.
+     Copy it, fill CARDS (and draw() per card), keep the FEEDBACK block as it is. Serve the folder with
+     bin/sketch_answers_server.py --dir <folder>: every answer lands in <this file>.answers.json beside it. -->
+<title>TITLE</title>
+<style>
+:root{--bg:#f4f2ee;--card:#fff;--ink:#2b2b2b;--dim:#6b6b6b;--box:#d9d6cf;--box2:#bdb8ae;--line:#8a857c;--accent:#2f6fb3;--bad:#c0392b;--good:#2e7d4f;--plain:#ece9e2}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1d20;--card:#26282c;--ink:#e6e3dc;--dim:#a19c93;--box:#4a4c51;--box2:#5d6066;--line:#9a958c;--accent:#6aa3e0;--bad:#e06b5e;--good:#5fbf86;--plain:#3a3c40}}
+:root[data-theme="dark"]{--bg:#1c1d20;--card:#26282c;--ink:#e6e3dc;--dim:#a19c93;--box:#4a4c51;--box2:#5d6066;--line:#9a958c;--accent:#6aa3e0;--bad:#e06b5e;--good:#5fbf86;--plain:#3a3c40}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,Segoe UI,sans-serif;padding:16px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--dim);margin:0 0 12px;max-width:900px}
+.card{background:var(--card);border-radius:10px;padding:14px;margin:0 0 16px;max-width:1200px}.card h2{font-size:17px;margin:0 0 6px}
+svg{width:100%;height:auto;display:block}svg text{fill:var(--ink);font:13px system-ui,sans-serif}svg .small{font-size:11px;fill:var(--dim)}
+/* ==== FEEDBACK block styles (keep) ==== */
+.fbbar{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0;margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:14px}
+.fbbar .where{color:var(--dim);font-size:12px}
+.fb{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px solid var(--box);padding-top:10px}
+.fb button,.fbbar button{font:inherit;font-size:13px;padding:5px 12px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.fb button.on[data-c="yes"]{background:var(--good);color:#fff;border-color:var(--good)}
+.fb button.on[data-c="no"]{background:var(--bad);color:#fff;border-color:var(--bad)}
+.fb button.on[data-c="change"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fb .note{flex:1;min-width:220px;display:flex;align-items:center;gap:6px}
+.fb textarea{flex:1;min-height:34px;font:inherit;font-size:13px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:5px 8px}
+.fb .st{width:84px;font-size:12px;text-align:left;white-space:nowrap}.fb .st.saved{color:var(--good);font-size:20px;line-height:1}
+.fb .st.pending{color:var(--dim)}.fb .st.failed{color:var(--bad)}
+</style></head><body>
+<h1>TITLE</h1>
+<p class="sub">What the operator decides here, in one sentence.</p>
+<div class="fbbar" id="fbbar"></div>
+<div id="cards"></div>
+<script>
+// ==== drawing primitives (functional-ui-sketch): every drawing is a short list of these calls ====
+const NS = "http://www.w3.org/2000/svg", v = n => `var(--${n})`;
+function S(w, h) { const s = document.createElementNS(NS, "svg"); s.setAttribute("viewBox", `0 0 ${w} ${h}`); return s; }
+function el(s, t, a, x) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (x != null) e.textContent = x; s.appendChild(e); return e; }
+function box(s, x, y, w, h, o = {}) { return el(s, "rect", { x, y, width: w, height: h, rx: 3, fill: o.fill ?? v("box"), stroke: o.stroke ?? v("line"), "stroke-width": o.sw ?? 1.5, "stroke-dasharray": o.dash ?? "" }); }
+function txt(s, x, y, t, o = {}) { return el(s, "text", { x, y, "text-anchor": o.anchor ?? "start", class: o.cls ?? "", fill: o.fill ?? "" }, t); }
+function line(s, x1, y1, x2, y2, o = {}) { return el(s, "line", { x1, y1, x2, y2, stroke: o.stroke ?? v("line"), "stroke-width": o.sw ?? 1.5, "stroke-dasharray": o.dash ?? "" }); }
+
+// ==== CARDS: fill these. Each card needs a stable id; draw(s) draws into a 412x240 svg ====
+const CARDS = [
+  { id: "C1", title: "The first decision", draw(s) { box(s, 10, 30, 180, 100); txt(s, 20, 60, "before"); box(s, 222, 30, 180, 100, { stroke: v("accent") }); txt(s, 232, 60, "now"); } },
+  { id: "C2", title: "The second decision", draw(s) { box(s, 10, 30, 392, 60); txt(s, 20, 64, "a grey box with real content"); } },
+];
+const root = document.getElementById("cards");
+for (const c of CARDS) { const sec = document.createElement("section"); sec.className = "card"; sec.id = c.id;
+  sec.innerHTML = `<h2>${c.id} · ${c.title}</h2>`; const s = S(412, 240); sec.appendChild(s); root.appendChild(sec); c.draw(s); }
+
+// ==== FEEDBACK block (keep as is) =====================================================================
+// Every .card[id] gets Yes / No / Change + a note. Served by sketch_answers_server.py, the answers go to
+// /answers/<this file> and land in <this file>.answers.json beside it. The FIRST change is written at once;
+// later changes are throttled (one write per THROTTLE_MS, the last change always written) and EVERY write is a
+// COMPLETE copy of all current answers - never an increment. A card's green check appears only when the write
+// that carried its latest change is confirmed on disk. Opened from disk (file://): answers stay in this browser
+// and "Download answers" saves the same JSON.
+(function () {
+  const THROTTLE_MS = 1000;
+  const sketch = decodeURIComponent(location.pathname.split("/").pop() || "sketch.html");
+  const key = "sketch-answers:" + sketch, served = location.protocol.startsWith("http");
+  let ans = {}, savedAt = "", rev = 0, lastSent = 0, timer = null, inFlight = false;
+  const changedRev = {};                       // card id -> the rev of its latest change
+  const cards = [...document.querySelectorAll(".card[id]")], bar = document.getElementById("fbbar");
+  const snapshot = () => ({ sketch, rev, answers: ans, counts: { cards: cards.length, answered: Object.values(ans).filter(a => a.choice).length } });
+  function drawBar(state) { const c = snapshot().counts;
+    bar.innerHTML = `<span><b>${c.answered} of ${c.cards}</b> answered</span><button id="fbdl">Download answers</button>
+      <span class="where">${served ? (state === "failed" ? "<b style='color:var(--bad)'>not saved - the server did not answer</b>" : "saved to disk beside the sketch" + (savedAt ? " · " + savedAt : "")) : "kept in this browser - download to hand them in"}</span>`;
+    document.getElementById("fbdl").onclick = () => { const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(snapshot(), null, 1)], { type: "application/json" }));
+      a.download = sketch.replace(/\.html$/, "") + ".answers.json"; a.click(); }; }
+  function mark(id, st) { const e = document.querySelector(`#${CSS.escape(id)} .fb .st`); if (!e) return;
+    e.className = "st " + st; e.textContent = st === "saved" ? "✓" : st === "pending" ? "saving…" : st === "failed" ? "not saved" : ""; e.title = st === "saved" ? "saved to disk " + savedAt : ""; }
+  async function write() {                     // one complete copy of every answer
+    if (inFlight) { schedule(); return; }
+    inFlight = true; lastSent = Date.now(); const sent = snapshot();
+    try { localStorage.setItem(key, JSON.stringify(ans)); } catch (e) {}
+    if (!served) { inFlight = false; drawBar(); return; }
+    try { const r = await fetch("/answers/" + encodeURIComponent(sketch), { method: "POST", body: JSON.stringify(sent) });
+      if (!r.ok) throw new Error(r.status); savedAt = (await r.json()).saved;
+      for (const [id, cr] of Object.entries(changedRev)) if (cr <= sent.rev) mark(id, "saved");
+      drawBar();
+    } catch (e) { for (const [id, cr] of Object.entries(changedRev)) if (cr > 0) mark(id, "failed"); drawBar("failed"); }
+    inFlight = false;
+    if (Object.values(changedRev).some(cr => cr > sent.rev)) schedule();   // changes made while writing
+  }
+  function schedule() { if (timer) return; const wait = Math.max(0, THROTTLE_MS - (Date.now() - lastSent));
+    timer = setTimeout(() => { timer = null; write(); }, wait); }
+  function changed(id) { rev += 1; changedRev[id] = rev; mark(id, served ? "pending" : "");
+    if (Date.now() - lastSent >= THROTTLE_MS && !inFlight) write(); else schedule(); }
+  function wire(card) { const id = card.id, f = document.createElement("div"); f.className = "fb";
+    f.innerHTML = `<button data-c="yes">Yes</button><button data-c="no">No</button><button data-c="change">Change</button>
+      <div class="note"><textarea placeholder="Note - what to change, or why (optional)"></textarea><span class="st"></span></div>`;
+    const a = ans[id] || {};
+    f.querySelectorAll("button").forEach(b => { b.classList.toggle("on", a.choice === b.dataset.c);
+      b.onclick = () => { const cur = ans[id] || {}; cur.choice = cur.choice === b.dataset.c ? null : b.dataset.c; ans[id] = cur;
+        f.querySelectorAll("button").forEach(x => x.classList.toggle("on", cur.choice === x.dataset.c)); changed(id); }; });
+    const t = f.querySelector("textarea"); t.value = a.note || "";
+    t.oninput = () => { ans[id] = { ...(ans[id] || {}), note: t.value }; changed(id); };
+    card.appendChild(f); if (served && (a.choice || a.note)) mark(id, "saved"); }
+  (async () => { try { ans = JSON.parse(localStorage.getItem(key) || "{}"); } catch (e) {}
+    if (served) { try { const r = await fetch("/answers/" + encodeURIComponent(sketch)); if (r.ok) { const j = await r.json();
+      ans = j.answers || {}; savedAt = j.saved || ""; rev = j.rev || 0; } } catch (e) { drawBar("failed"); } }
+    cards.forEach(wire); drawBar(); })();
+})();
+</script></body></html>
